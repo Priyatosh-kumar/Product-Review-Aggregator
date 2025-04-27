@@ -1,0 +1,165 @@
+{% extends 'reviews/base.html' %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+        <h1 class="text-2xl font-bold text-gray-800 mb-4">Product Review Analysis</h1>
+        <p class="text-gray-600 mb-6">Enter a product URL to analyze its customer reviews using AI.</p>
+        
+        <form id="analyzeForm" class="mb-6">
+            {% csrf_token %}
+            <div class="flex gap-4">
+                <input type="url" id="productUrl" name="url" required
+                    class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Paste product URL here">
+                <button type="submit"
+                    class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    Analyze
+                </button>
+            </div>
+        </form>
+
+        <div id="loading" class="hidden">
+            <div class="flex items-center justify-center py-8">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                <span class="ml-4 text-gray-600">Analyzing reviews...</span>
+            </div>
+        </div>
+
+        <div id="error" class="hidden">
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                <span id="errorMessage" class="block sm:inline"></span>
+            </div>
+        </div>
+
+        <div id="results" class="hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div class="bg-green-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-green-800 mb-2">Pros</h3>
+                    <ul id="prosList" class="list-disc list-inside text-green-700"></ul>
+                </div>
+                <div class="bg-red-50 p-4 rounded-lg">
+                    <h3 class="font-semibold text-red-800 mb-2">Cons</h3>
+                    <ul id="consList" class="list-disc list-inside text-red-700"></ul>
+                </div>
+            </div>
+
+            <div class="bg-gray-50 p-4 rounded-lg mb-6">
+                <h3 class="font-semibold text-gray-800 mb-2">Overview</h3>
+                <p id="overview" class="text-gray-700"></p>
+            </div>
+
+            <div class="bg-blue-50 p-4 rounded-lg">
+                <h3 class="font-semibold text-blue-800 mb-4">Rating Distribution</h3>
+                <div id="ratings" class="space-y-2">
+                    <div class="flex items-center">
+                        <span class="w-16">5 ⭐</span>
+                        <div class="flex-1 mx-2">
+                            <div class="bg-gray-200 rounded-full h-2.5">
+                                <div id="rating5" class="bg-yellow-400 h-2.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <span id="rating5Text" class="w-12 text-right">0%</span>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="w-16">4 ⭐</span>
+                        <div class="flex-1 mx-2">
+                            <div class="bg-gray-200 rounded-full h-2.5">
+                                <div id="rating4" class="bg-yellow-400 h-2.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <span id="rating4Text" class="w-12 text-right">0%</span>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="w-16">3 ⭐</span>
+                        <div class="flex-1 mx-2">
+                            <div class="bg-gray-200 rounded-full h-2.5">
+                                <div id="rating3" class="bg-yellow-400 h-2.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <span id="rating3Text" class="w-12 text-right">0%</span>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="w-16">2 ⭐</span>
+                        <div class="flex-1 mx-2">
+                            <div class="bg-gray-200 rounded-full h-2.5">
+                                <div id="rating2" class="bg-yellow-400 h-2.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <span id="rating2Text" class="w-12 text-right">0%</span>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="w-16">1 ⭐</span>
+                        <div class="flex-1 mx-2">
+                            <div class="bg-gray-200 rounded-full h-2.5">
+                                <div id="rating1" class="bg-yellow-400 h-2.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <span id="rating1Text" class="w-12 text-right">0%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('analyzeForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const url = document.getElementById('productUrl').value;
+    const loading = document.getElementById('loading');
+    const error = document.getElementById('error');
+    const results = document.getElementById('results');
+    
+    // Reset and show loading
+    error.classList.add('hidden');
+    results.classList.add('hidden');
+    loading.classList.remove('hidden');
+    
+    try {
+        const response = await fetch('{% url "reviews:analyze" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `url=${encodeURIComponent(url)}`
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            // Update pros
+            const prosList = document.getElementById('prosList');
+            prosList.innerHTML = data.pros.map(pro => `<li>${pro}</li>`).join('');
+            
+            // Update cons
+            const consList = document.getElementById('consList');
+            consList.innerHTML = data.cons.map(con => `<li>${con}</li>`).join('');
+            
+            // Update overview
+            document.getElementById('overview').textContent = data.overview;
+            
+            // Update ratings
+            for (let i = 1; i <= 5; i++) {
+                const percentage = data.ratings[i];
+                document.getElementById(`rating${i}`).style.width = `${percentage}%`;
+                document.getElementById(`rating${i}Text`).textContent = `${Math.round(percentage)}%`;
+            }
+            
+            results.classList.remove('hidden');
+        } else {
+            throw new Error(data.error || 'Failed to analyze reviews');
+        }
+    } catch (err) {
+        document.getElementById('errorMessage').textContent = err.message;
+        error.classList.remove('hidden');
+    } finally {
+        loading.classList.add('hidden');
+    }
+});
+</script>
+{% endblock %} 
